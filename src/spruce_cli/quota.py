@@ -2,6 +2,7 @@
 
 import math
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -19,12 +20,14 @@ from spruce_cli.strategies import STRATEGIES, QuotaOptions, whole_gb_in_mb
 
 
 def _csom_date(value: object) -> str:
-    """/Date(2023,5,14,7,30,33,573)/ (zero-based month) -> 2023-06-14"""
-    match = re.search(r"Date\((\d+),(\d+),(\d+)", str(value or ""))
-    if not match:
-        return str(value or "")[:10]
-    year, month, day = (int(g) for g in match.groups())
-    return f"{year}-{month + 1:02d}-{day:02d}"
+    """/Date(2023,5,14,7,30,33,573)/ (zero-based month) or /Date(1793765463483)/ (epoch ms, UTC) -> ISO date"""
+    text = str(value or "")
+    if match := re.search(r"Date\((\d+),(\d+),(\d+)", text):
+        year, month, day = (int(g) for g in match.groups())
+        return f"{year}-{month + 1:02d}-{day:02d}"
+    if match := re.search(r"Date\((-?\d+)\)", text):
+        return datetime.fromtimestamp(int(match.group(1)) / 1000, UTC).date().isoformat()
+    return text[:10]
 
 
 def _guid(value: object) -> str:
