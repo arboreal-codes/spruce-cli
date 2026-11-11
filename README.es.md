@@ -62,7 +62,7 @@ uv tool install git+https://github.com/arboreal-codes/spruce-cli
 uv tool upgrade spruce-cli
 ```
 
-Para fijar una versión, agregar `@v0.1.0` (un tag) o `@<commit>` a la URL.
+Para fijar una versión, agregar `@v0.2.0` (un tag) o `@<commit>` a la URL.
 
 Después, en la carpeta donde se quieran guardar la configuración y los reportes:
 
@@ -148,6 +148,7 @@ Dentro de una sesión, los comandos toman por defecto su último archivo de entr
 | 6. Recorte               | `spruce versions trim --site URL --mode count --major-version-limit 100`           |
 | 6. Papeleras             | `spruce cleanup analyze --status OverCap` / `cleanup purge-recycle-bin`            |
 | Cualquiera               | `spruce sites select ...` muestra qué sitios elige una selección                   |
+| Cualquiera               | `spruce ui` abre el [panel web](#panel-web)                                        |
 
 `spruce --help` y `spruce <comando> --help` listan todas las opciones. Qué hace cada paso y
 por qué está en [docs/strategy.es.md](docs/strategy.es.md).
@@ -244,6 +245,36 @@ spruce cleanup purge-recycle-bin --site URL --stage 2 --older-than-days 30 --dry
 - La Preservation Hold Library solo se informa: se libera cambiando la política de retención en
   Microsoft Purview. Solo se mide la biblioteca del sitio raíz (los subsitios tienen la suya).
 
+## Panel web
+
+Un panel local sobre los archivos de la sesión: sitios con los mismos filtros y exclusiones que
+la CLI, todas las estrategias de quota comparadas lado a lado con las opciones que escribas, los
+pedidos de reportes de versiones de todas las sesiones, la simulación de versiones y el análisis
+de papeleras / Preservation Hold.
+
+Los sitios seleccionados en la tabla se pueden copiar como opciones `--site`, bajar como CSV
+para `--exclude-file`, pedirles el reporte de versiones o analizar sus papeleras; todas las
+tablas se pueden bajar en CSV.
+
+Las vistas solo leen archivos de la sesión. Las acciones que llaman a SharePoint (login,
+exportar sitios, pedir y recibir reportes de versiones, análisis de papeleras) corren el mismo
+código que la CLI, de a una, con su salida en una ventana de log, y quedan anotadas en el
+`history.log` de la sesión. El panel también crea sesiones y guarda planes de quota ("Save
+plan"). Nunca cambia quotas ni políticas de versiones ni borra nada: para eso, la CLI.
+
+La pestaña "Command builder" ayuda con eso: elegís cualquier comando, completás sus opciones
+(salen de la propia CLI, con la ayuda de cada una al pasar el mouse) y copiás el comando, con la
+sesión y el perfil ya puestos. Los sitios seleccionados en la pestaña Sites pueden completar
+`--site`, y los comandos que cambian el tenant arrancan con `--dry-run` marcado. Las comillas son
+las de shells de macOS/Linux; en PowerShell de Windows, revisalas antes de correrlo.
+
+```bash
+uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui
+```
+
+Escucha solo en `http://127.0.0.1:8765` (`--port` para cambiarlo, `--no-browser` para no
+abrirlo). La sesión se elige en el encabezado; `-s` y `-p` funcionan como en todos los comandos.
+
 ## Desarrollo
 
 ```bash
@@ -265,6 +296,8 @@ uv run ty check
 | `versions.py`           | pasos 4 y 6                                          |
 | `whatif.py`             | paso 5 (Polars)                                      |
 | `cleanup.py`            | papeleras y Preservation Hold Library                |
+| `dashboard.py`          | datos del panel web (sin imports de UI)              |
+| `ui.py`                 | panel web (NiceGUI, extra opcional `ui`)             |
 
 Las llamadas que modifican SharePoint no están cubiertas por los tests (necesitan un tenant).
 El código nuevo conviene probarlo con `--dry-run` y primero en un sitio chico.

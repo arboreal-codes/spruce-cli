@@ -57,7 +57,7 @@ uv tool install git+https://github.com/arboreal-codes/spruce-cli
 uv tool upgrade spruce-cli
 ```
 
-Add `@v0.1.0` (a tag) or `@<commit>` to the URL to pin a version.
+Add `@v0.2.0` (a tag) or `@<commit>` to the URL to pin a version.
 
 Then, in the folder where you want to keep config and reports:
 
@@ -139,6 +139,7 @@ the commands run in it.
 | 6. Trim            | `spruce versions trim --site URL --mode count --major-version-limit 100`           |
 | 6. Recycle bins    | `spruce cleanup analyze --status OverCap` / `cleanup purge-recycle-bin`            |
 | Any                | `spruce sites select ...` previews a site selection                                |
+| Any                | `spruce ui` opens the [web dashboard](#web-dashboard)                              |
 
 `spruce --help` and `spruce <command> --help` list every option. What each step does and why
 is in [docs/strategy.md](docs/strategy.md).
@@ -228,6 +229,35 @@ spruce cleanup purge-recycle-bin --site URL --stage 2 --older-than-days 30 --dry
 - The Preservation Hold Library is only reported: it is freed by changing the retention policy in
   Microsoft Purview. Only the root web's library is measured (subsites have their own).
 
+## Web dashboard
+
+A local dashboard over the session files: sites with the same filters and exclusions as the
+CLI, all quota strategies compared side by side with the options you type, version report jobs
+of every session, the version simulation and the recycle bin / Preservation Hold analysis.
+
+Select sites in the table to copy them as `--site` options, download them as a CSV for
+`--exclude-file`, request their version reports or analyze their recycle bins; every table has a
+CSV download.
+
+The views only read session files. Actions that call SharePoint (log in, export sites, request
+and receive version reports, cleanup analysis) run the same code as the CLI, one at a time, with
+their output in a log window, and are recorded in the session's `history.log`. The dashboard
+also writes new sessions and quota plans ("Save plan"). It never changes quotas or version
+policies and never deletes anything: use the CLI for that.
+
+The "Command builder" tab helps with those: pick any command, fill its options (read from the
+CLI itself, with each option's help on hover) and copy the resulting command, with the session
+and profile already set. Sites selected in the Sites tab can fill `--site`, and commands that
+change the tenant start with `--dry-run` checked. The command is quoted for macOS/Linux shells;
+on Windows PowerShell, check the quotes before running it.
+
+```bash
+uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui
+```
+
+It listens on `http://127.0.0.1:8765` only (`--port` to change it, `--no-browser` to not open
+it). Pick the session in the header; `-s` and `-p` work as in every command.
+
 ## Development
 
 ```bash
@@ -249,6 +279,8 @@ uv run ty check
 | `versions.py`           | steps 4 and 6                              |
 | `whatif.py`             | step 5 (Polars)                            |
 | `cleanup.py`            | recycle bins and Preservation Hold Library |
+| `dashboard.py`          | data for the web dashboard (no UI imports) |
+| `ui.py`                 | web dashboard (NiceGUI, optional `ui` extra) |
 
 Calls that change SharePoint are not covered by the tests (they need a tenant). Try new code with
 `--dry-run` and on a small site first.
