@@ -139,6 +139,7 @@ the commands run in it.
 | 6. Trim            | `spruce versions trim --site URL --mode count --major-version-limit 100`           |
 | 6. Recycle bins    | `spruce cleanup analyze --status OverCap` / `cleanup purge-recycle-bin`            |
 | Any                | `spruce sites select ...` previews a site selection                                |
+| Any                | `spruce ui` opens the [web dashboard](#web-dashboard) (read-only)                  |
 
 `spruce --help` and `spruce <command> --help` list every option. What each step does and why
 is in [docs/strategy.md](docs/strategy.md).
@@ -228,6 +229,19 @@ spruce cleanup purge-recycle-bin --site URL --stage 2 --older-than-days 30 --dry
 - The Preservation Hold Library is only reported: it is freed by changing the retention policy in
   Microsoft Purview. Only the root web's library is measured (subsites have their own).
 
+## Web dashboard
+
+A local, read-only dashboard over the session files: sites with the same filters as the CLI,
+all quota strategies compared side by side with the options you type, the version simulation
+and the recycle bin / Preservation Hold analysis. It never calls SharePoint.
+
+```bash
+uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui
+```
+
+It listens on `http://127.0.0.1:8765` only (`--port` to change it, `--no-browser` to not open
+it). Pick the session in the header; `-s` and `-p` work as in every command.
+
 ## Development
 
 ```bash
@@ -249,6 +263,8 @@ uv run ty check
 | `versions.py`           | steps 4 and 6                              |
 | `whatif.py`             | step 5 (Polars)                            |
 | `cleanup.py`            | recycle bins and Preservation Hold Library |
+| `dashboard.py`          | data for the web dashboard (no UI imports) |
+| `ui.py`                 | web dashboard (NiceGUI, optional `ui` extra) |
 
 Calls that change SharePoint are not covered by the tests (they need a tenant). Try new code with
 `--dry-run` and on a small site first.

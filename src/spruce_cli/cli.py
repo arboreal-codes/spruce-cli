@@ -242,6 +242,22 @@ def logout() -> None:
     print("Logged out.")
 
 
+@app.command("ui")
+def web_ui(
+    port: Annotated[int, typer.Option(help="Local port.")] = 8765,
+    browser: Annotated[bool, typer.Option(help="Open the browser.")] = True,
+) -> None:
+    """Open a read-only dashboard of the sessions in the browser (needs the 'ui' extra)."""
+    try:
+        from spruce_cli import ui
+    except ImportError as error:
+        raise UserError(
+            "The web UI needs NiceGUI. Run it with:\n"
+            '  uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui'
+        ) from error
+    ui.run(state.config, state.session_name, port, browser)
+
+
 @session_app.command("new")
 def session_new(name: str, note: Annotated[str, typer.Option(help="Free text saved in session.json.")] = "") -> None:
     """Create a session folder for the reports of one run."""

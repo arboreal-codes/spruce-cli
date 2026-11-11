@@ -148,6 +148,7 @@ Dentro de una sesión, los comandos toman por defecto su último archivo de entr
 | 6. Recorte               | `spruce versions trim --site URL --mode count --major-version-limit 100`           |
 | 6. Papeleras             | `spruce cleanup analyze --status OverCap` / `cleanup purge-recycle-bin`            |
 | Cualquiera               | `spruce sites select ...` muestra qué sitios elige una selección                   |
+| Cualquiera               | `spruce ui` abre el [panel web](#panel-web) (solo lectura)                         |
 
 `spruce --help` y `spruce <comando> --help` listan todas las opciones. Qué hace cada paso y
 por qué está en [docs/strategy.es.md](docs/strategy.es.md).
@@ -244,6 +245,19 @@ spruce cleanup purge-recycle-bin --site URL --stage 2 --older-than-days 30 --dry
 - La Preservation Hold Library solo se informa: se libera cambiando la política de retención en
   Microsoft Purview. Solo se mide la biblioteca del sitio raíz (los subsitios tienen la suya).
 
+## Panel web
+
+Un panel local, de solo lectura, sobre los archivos de la sesión: sitios con los mismos filtros
+que la CLI, todas las estrategias de quota comparadas lado a lado con las opciones que escribas,
+la simulación de versiones y el análisis de papeleras / Preservation Hold. Nunca llama a SharePoint.
+
+```bash
+uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui
+```
+
+Escucha solo en `http://127.0.0.1:8765` (`--port` para cambiarlo, `--no-browser` para no
+abrirlo). La sesión se elige en el encabezado; `-s` y `-p` funcionan como en todos los comandos.
+
 ## Desarrollo
 
 ```bash
@@ -265,6 +279,8 @@ uv run ty check
 | `versions.py`           | pasos 4 y 6                                          |
 | `whatif.py`             | paso 5 (Polars)                                      |
 | `cleanup.py`            | papeleras y Preservation Hold Library                |
+| `dashboard.py`          | datos del panel web (sin imports de UI)              |
+| `ui.py`                 | panel web (NiceGUI, extra opcional `ui`)             |
 
 Las llamadas que modifican SharePoint no están cubiertas por los tests (necesitan un tenant).
 El código nuevo conviene probarlo con `--dry-run` y primero en un sitio chico.

@@ -87,21 +87,27 @@ def read_exclude_file(path: Path) -> list[str]:
     return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
 
 
-def _candidates(session: Path, f: SiteFilter) -> list[dict[str, Any]]:
+def candidate_sites(session: Path, f: SiteFilter) -> tuple[list[dict[str, Any]], list[Path]]:
+    """Latest site-storage joined with the latest quota plan (or the given files). Returns (rows, sources)."""
     storage = f.storage or _latest_or_none(session, "site-storage")
     plan = f.plan or _latest_or_none(session, "quota-plan")
     if storage is None and plan is None:
         raise UserError("No site-storage or quota-plan in the session. Run 'spruce sites export' or pass --site.")
+    sources = [p for p in (storage, plan) if p is not None]
     by_url: dict[str, dict[str, Any]] = {}
-    for source in (storage, plan):
-        if source is None:
-            continue
-        print(f"Sites from {source.name}")
+    for source in sources:
         for row in read_csv(source):
             by_url.setdefault(_norm(row["Url"]), {}).update(row)
     if f.status and plan is None:
         raise UserError("--status needs a quota plan in the session (or --plan).")
-    return list(by_url.values())
+    return list(by_url.values()), sources
+
+
+def filter_sites(rows: list[dict[str, Any]], f: SiteFilter) -> list[dict[str, Any]]:
+    """Apply the filters (not the exclusions); largest first, then --top."""
+    today = date.today()
+    kept = sorted((r for r in rows if _keep(r, f, today)), key=lambda r: -float(r.get("UsedMB") or 0))
+    return kept[: f.top] if f.top is not None else kept
 
 
 def _latest_or_none(session: Path, prefix: str) -> Path | None:
@@ -148,11 +154,10 @@ def select_sites(session: Path, sessions_dir: Path, f: SiteFilter, command: str)
                 "Choose the sites: --site URL, or filters such as --status OverCap, --min-used-gb 80, "
                 "--top 10, --match '*Proyectos*' (use --all for every site)."
             )
-        today = date.today()
-        rows = [r for r in _candidates(session, f) if _keep(r, f, today)]
-        rows.sort(key=lambda r: -float(r.get("UsedMB") or 0))
-        if f.top is not None:
-            rows = rows[: f.top]
+        candidates, sources = candidate_sites(session, f)
+        for source in sources:
+            print(f"Sites from {source.name}")
+        rows = filter_sites(candidates, f)
         urls = [r["Url"].rstrip("/") for r in rows]
         info = {r["Url"].rstrip("/"): r for r in rows}
 
