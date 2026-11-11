@@ -40,9 +40,7 @@ def export_sites(sp: SharePoint, session: Path) -> Path:
         url = str(site.get("Url", "")).rstrip("/")
         template = str(site.get("Template", ""))
         hostname = (urlparse(url).hostname or "").lower()
-        is_onedrive_host = re.fullmatch(
-            r"(?:[a-z0-9-]+\.)*[a-z0-9-]*-my\.sharepoint\.com", hostname
-        ) is not None
+        is_onedrive_host = re.fullmatch(r"(?:[a-z0-9-]+\.)*[a-z0-9-]*-my\.sharepoint\.com", hostname) is not None
         if template.startswith(("RedirectSite", "SPSPERS")) or is_onedrive_host:
             continue
         used = int(site.get("StorageUsage") or 0)
