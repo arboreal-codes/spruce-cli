@@ -529,7 +529,7 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
         profile = config.profile if config.profile != "default" else None
 
         with ui.header().classes("items-center gap-4 bg-white text-black border-b"):
-            ui.label("spruce").classes("text-xl font-semibold")
+            ui.label("🌲 spruce").classes("text-xl font-semibold")
             ui.label(f"profile: {config.profile}").classes("text-gray-600")
             ui.space()
 
@@ -623,4 +623,6 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
         body()
 
     print(f"spruce UI on http://127.0.0.1:{port} (Ctrl+C to stop)")
-    ui.run(host="127.0.0.1", port=port, title="spruce", show=show, reload=False, show_welcome_message=False)
+    ui.run(
+        host="127.0.0.1", port=port, title="spruce", favicon="🌲", show=show, reload=False, show_welcome_message=False
+    )
