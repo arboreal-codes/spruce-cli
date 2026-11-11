@@ -1,0 +1,19 @@
+# Easiest: run `spruce init [PROFILE]`, which asks for these values and writes the file.
+# Or copy to spruce.toml (or spruce.<profile>.toml) and fill in your tenant values.
+
+# SharePoint admin center URL
+admin_url = "https://contoso-admin.sharepoint.com"
+
+# Tenant ID or domain
+tenant = "contoso.onmicrosoft.com"
+
+# Client ID of your own Entra ID app (public client, delegated SharePoint AllSites.FullControl,
+# redirect URI http://localhost). An app created with `m365 setup` or
+# Register-PnPEntraIDAppForInteractiveLogin works as is.
+client_id = "00000000-0000-0000-0000-000000000000"
+
+# "browser" opens the browser; "device-code" prints a code to enter at microsoft.com/devicelogin
+auth = "browser"
+
+# Folder for session folders (relative to this file or absolute)
+sessions_dir = "sessions"

@@ -1,0 +1,47 @@
+[project]
+name = "spruce-cli"
+version = "0.1.0"
+description = "Cut down SharePoint Online storage step by step: quotas, version policies, trims and recycle bins"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["sharepoint", "microsoft-365", "storage", "quota", "versioning", "cli"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Systems Administration",
+]
+authors = [
+    { name = "Diego Gadola", email = "diego.gadola@arboreal.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "msal>=1.39.0",
+    "polars>=2.1.0",
+    "requests>=2.34.2",
+    "typer>=0.29.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/arboreal-codes/spruce-cli"
+Documentation = "https://github.com/arboreal-codes/spruce-cli/blob/main/docs/strategy.md"
+Issues = "https://github.com/arboreal-codes/spruce-cli/issues"
+
+[project.scripts]
+spruce = "spruce_cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4",
+    "ty>=0.0.100",
+]
+
+[tool.ruff]
+line-length = 120
