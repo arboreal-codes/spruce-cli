@@ -44,20 +44,32 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-Run spruce straight from GitHub (uv downloads Python and the dependencies the first time):
+Install spruce as a regular command, in one of two ways (uv downloads Python and the
+dependencies the first time):
+
+**With the [web dashboard](#web-dashboard)** (the `[ui]` extra, adds NiceGUI):
 
 ```bash
-uvx --from git+https://github.com/arboreal-codes/spruce-cli spruce --help
+uv tool install "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli"
 ```
 
-Or install it as a regular command, and upgrade it later:
+**Command line only** (lighter; `spruce ui` is not available):
 
 ```bash
-uv tool install git+https://github.com/arboreal-codes/spruce-cli
-uv tool upgrade spruce-cli
+uv tool install "spruce-cli @ git+https://github.com/arboreal-codes/spruce-cli"
 ```
 
-Add `@v0.3.0` (a tag) or `@<commit>` to the URL to pin a version.
+To switch from one to the other later, run the other command with `--reinstall`.
+
+Update with `uv tool upgrade spruce-cli` (it keeps the option you installed). To pin a version,
+add `@v0.3.0` (a tag) or `@<commit>` to the URL, as in
+`"spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli@v0.3.0"`.
+
+To try spruce without installing it, use `uvx` with the same package spec:
+
+```bash
+uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce --help
+```
 
 Then, in the folder where you want to keep config and reports:
 
@@ -69,6 +81,9 @@ spruce sites export                  # step 1
 spruce quota plan --budget-tb 5      # step 2, offline
 spruce quota apply --dry-run         # step 3, preview
 ```
+
+Or, after `spruce init`, do it from the browser: `spruce ui` opens the dashboard, where you can
+log in, create a session and export the sites.
 
 ## Prerequisites
 
@@ -252,8 +267,11 @@ change the tenant start with `--dry-run` checked. The command is quoted for macO
 on Windows PowerShell, check the quotes before running it.
 
 ```bash
-uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui
+spruce ui
 ```
+
+It needs the `[ui]` extra, included in the [quick start](#quick-start) install (without
+installing: `uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui`).
 
 It listens on `http://127.0.0.1:8765` only (`--port` to change it, `--no-browser` to not open
 it). Pick the session in the header; `-s` and `-p` work as in every command.

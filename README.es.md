@@ -49,20 +49,32 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-Correr spruce directamente desde GitHub (uv descarga Python y las dependencias la primera vez):
+Instalar spruce como un comando más, de una de estas dos formas (uv descarga Python y las
+dependencias la primera vez):
+
+**Con el [panel web](#panel-web)** (el extra `[ui]`, suma NiceGUI):
 
 ```bash
-uvx --from git+https://github.com/arboreal-codes/spruce-cli spruce --help
+uv tool install "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli"
 ```
 
-O instalarlo como un comando más, y actualizarlo después:
+**Solo línea de comandos** (más liviano; sin `spruce ui`):
 
 ```bash
-uv tool install git+https://github.com/arboreal-codes/spruce-cli
-uv tool upgrade spruce-cli
+uv tool install "spruce-cli @ git+https://github.com/arboreal-codes/spruce-cli"
 ```
 
-Para fijar una versión, agregar `@v0.3.0` (un tag) o `@<commit>` a la URL.
+Para pasar de una a otra más adelante, correr el otro comando con `--reinstall`.
+
+Para actualizar, `uv tool upgrade spruce-cli` (mantiene la opción instalada). Para fijar una
+versión, agregar `@v0.3.0` (un tag) o `@<commit>` a la URL, como en
+`"spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli@v0.3.0"`.
+
+Para probar spruce sin instalarlo, usar `uvx` con el mismo paquete:
+
+```bash
+uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce --help
+```
 
 Después, en la carpeta donde se quieran guardar la configuración y los reportes:
 
@@ -74,6 +86,9 @@ spruce sites export                  # paso 1
 spruce quota plan --budget-tb 5      # paso 2, sin conexión
 spruce quota apply --dry-run         # paso 3, vista previa
 ```
+
+O, después de `spruce init`, hacerlo desde el navegador: `spruce ui` abre el panel, donde se
+puede iniciar sesión, crear una sesión y exportar los sitios.
 
 ## Requisitos
 
@@ -269,8 +284,11 @@ sesión y el perfil ya puestos. Los sitios seleccionados en la pestaña Sites pu
 las de shells de macOS/Linux; en PowerShell de Windows, revisalas antes de correrlo.
 
 ```bash
-uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui
+spruce ui
 ```
+
+Necesita el extra `[ui]`, incluido en la instalación del [inicio rápido](#inicio-rápido) (sin
+instalar: `uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui`).
 
 Escucha solo en `http://127.0.0.1:8765` (`--port` para cambiarlo, `--no-browser` para no
 abrirlo). La sesión se elige en el encabezado; `-s` y `-p` funcionan como en todos los comandos.
