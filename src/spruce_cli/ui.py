@@ -515,10 +515,8 @@ def _session_tab(session: Path) -> None:
 
 
 def run(config: Config, session_name: str | None, port: int, show: bool) -> None:
-    sessions = list_sessions(config)
-    if not sessions:
-        raise UserError("No sessions yet. Create one with: spruce session new <name>")
-    start = resolve_session(config, session_name)
+    # No sessions yet: start empty and let the user create one from the header.
+    start = resolve_session(config, session_name) if list_sessions(config) else None
 
     busy = asyncio.Lock()  # one SharePoint action at a time, for every browser tab
 
@@ -546,7 +544,7 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
 
             account()
             names = [p.name for p in list_sessions(config)]
-            picker = ui.select(names, value=start.name, label="Session").classes("w-96")
+            picker = ui.select(names, value=start.name if start else None, label="Session").classes("w-96")
             ui.button(icon="add", on_click=lambda: dialog.open()).props("flat round").tooltip("New session")
             ui.button(icon="refresh", on_click=lambda: body.refresh()).props("flat round").tooltip("Reload files")
 
@@ -595,6 +593,12 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
         @ui.refreshable
         def body() -> None:
             session = current["session"]
+            if session is None:
+                with ui.column().classes("w-full items-center gap-4 mt-16"):
+                    ui.label("No sessions yet").classes("text-xl font-medium")
+                    ui.label("A session is a folder that keeps the reports of one run.").classes("text-gray-600")
+                    ui.button("Create session", icon="add", on_click=dialog.open).props("no-caps")
+                return
             tabs_spec = [
                 ("Sites", lambda s: _sites_tab(s, act, picked)),
                 ("Quota plans", _quota_tab),
