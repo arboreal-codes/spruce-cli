@@ -199,6 +199,9 @@ class SharePoint:
         sites: list[dict[str, Any]] = []
         start = ""
         while True:
+            # SharePoint rejects an empty StartIndex ("Must specify valid information for
+            # parsing in the string"), so send it only when paging.
+            start_xml = f'<Property Name="StartIndex" Type="String">{escape(start)}</Property>' if start else ""
             response = self.csom(
                 '<ObjectPath Id="4" ObjectPathId="3" /><Query Id="5" ObjectPathId="3">'
                 '<Query SelectAllProperties="true"><Properties>'
@@ -209,7 +212,7 @@ class SharePoint:
                 '<Property Name="Filter" Type="String"></Property>'
                 '<Property Name="IncludeDetail" Type="Boolean">false</Property>'
                 '<Property Name="IncludePersonalSite" Type="Enum">0</Property>'
-                f'<Property Name="StartIndex" Type="String">{escape(start)}</Property>'
+                f"{start_xml}"
                 '<Property Name="Template" Type="String"></Property>'
                 f'</Parameter></Parameters></Method><Constructor Id="1" TypeId="{TENANT_TYPE}" />',
             )
