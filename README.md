@@ -57,7 +57,7 @@ uv tool install git+https://github.com/arboreal-codes/spruce-cli
 uv tool upgrade spruce-cli
 ```
 
-Add `@v0.2.0` (a tag) or `@<commit>` to the URL to pin a version.
+Add `@v0.2.1` (a tag) or `@<commit>` to the URL to pin a version.
 
 Then, in the folder where you want to keep config and reports:
 

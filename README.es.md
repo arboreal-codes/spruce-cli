@@ -62,7 +62,7 @@ uv tool install git+https://github.com/arboreal-codes/spruce-cli
 uv tool upgrade spruce-cli
 ```
 
-Para fijar una versión, agregar `@v0.2.0` (un tag) o `@<commit>` a la URL.
+Para fijar una versión, agregar `@v0.2.1` (un tag) o `@<commit>` a la URL.
 
 Después, en la carpeta donde se quieran guardar la configuración y los reportes:
 
