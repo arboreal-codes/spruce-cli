@@ -1,6 +1,6 @@
 [project]
 name = "spruce-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cut down SharePoint Online storage step by step: quotas, version policies, trims and recycle bins"
 readme = "README.md"
 license = "MIT"
