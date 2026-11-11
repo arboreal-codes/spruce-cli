@@ -245,6 +245,12 @@ their output in a log window, and are recorded in the session's `history.log`. T
 also writes new sessions and quota plans ("Save plan"). It never changes quotas or version
 policies and never deletes anything: use the CLI for that.
 
+The "Command builder" tab helps with those: pick any command, fill its options (read from the
+CLI itself, with each option's help on hover) and copy the resulting command, with the session
+and profile already set. Sites selected in the Sites tab can fill `--site`, and commands that
+change the tenant start with `--dry-run` checked. The command is quoted for macOS/Linux shells;
+on Windows PowerShell, check the quotes before running it.
+
 ```bash
 uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui
 ```

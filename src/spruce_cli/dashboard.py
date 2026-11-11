@@ -3,7 +3,9 @@
 import csv
 import io
 import json
-from dataclasses import asdict
+import shlex
+from dataclasses import asdict, dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -187,3 +189,107 @@ def signed_in_account(config: Config) -> str | None:
     cache.deserialize(config.token_cache.read_text(encoding="utf-8"))
     accounts = list(cache.search(msal.TokenCache.CredentialType.ACCOUNT))
     return accounts[0].get("username") if accounts else None
+
+
+# ------------------------------------------------------------ command builder
+
+# Commands that change the tenant: the builder suggests --dry-run first.
+CHANGES_TENANT = {
+    "quota apply",
+    "versions report-start",
+    "versions policy",
+    "versions trim",
+    "cleanup purge-recycle-bin",
+}
+
+
+@dataclass
+class Param:
+    name: str
+    flag: str  # '--mode'; empty for positional arguments
+    kind: str  # flag | choice | multi | value | argument
+    help: str = ""
+    required: bool = False
+    default: Any = None
+    choices: list[str] = field(default_factory=list)
+    no_flag: str = ""  # '--no-browser' for flags that default to on
+
+
+def cli_commands() -> dict[str, tuple[str, list[Param]]]:
+    """'quota apply' -> (help, params) for every CLI command, read from the Typer app itself."""
+    import typer
+
+    from spruce_cli.cli import app
+
+    out: dict[str, tuple[str, list[Param]]] = {}
+
+    def walk(command: Any, path: list[str]) -> None:
+        if hasattr(command, "commands"):
+            for name, sub in command.commands.items():
+                walk(sub, [*path, name])
+            return
+        if path == ["ui"]:
+            return
+        params = []
+        for p in command.params:
+            if p.name in ("help",) or getattr(p, "hidden", False):
+                continue
+            annotation = getattr(getattr(p, "type_descriptor", None), "annotation", None)
+            choices = (
+                [m.value for m in annotation] if isinstance(annotation, type) and issubclass(annotation, Enum) else []
+            )
+            default = p.default.value if isinstance(p.default, Enum) else p.default
+            if not p.opts[0].startswith("-"):
+                kind = "argument"
+            elif getattr(p, "is_flag", False):
+                kind = "flag"
+            elif choices:
+                kind = "choice"
+            elif p.multiple:
+                kind = "multi"
+            else:
+                kind = "value"
+            params.append(
+                Param(
+                    name=p.name,
+                    flag="" if kind == "argument" else p.opts[0],
+                    kind=kind,
+                    help=getattr(p, "help", None) or "",
+                    required=p.required,
+                    default=default,
+                    choices=choices,
+                    no_flag=p.secondary_opts[0] if p.secondary_opts else "",
+                )
+            )
+        out[" ".join(path)] = ((command.help or "").strip().split("\n")[0], params)
+
+    walk(typer.main.get_command(app), [])
+    return out
+
+
+def build_command(
+    path: str, params: list[Param], values: dict[str, Any], session: str | None = None, profile: str | None = None
+) -> str:
+    """The shell command for a CLI path and form values; options left at their default are omitted."""
+    parts = ["spruce"]
+    if profile:
+        parts += ["-p", profile]
+    if session:
+        parts += ["-s", session]
+    parts += path.split()
+    for p in params:
+        value = values.get(p.name)
+        if p.kind == "flag":
+            if value and not p.default:
+                parts.append(p.flag)
+            elif not value and p.default and p.no_flag:
+                parts.append(p.no_flag)
+        elif p.kind == "multi":
+            lines = value.splitlines() if isinstance(value, str) else list(value or [])
+            for item in (line.strip() for line in lines):
+                if item:
+                    parts += [p.flag, item]
+        elif value not in (None, "") and str(value) != str(p.default):
+            text = f"{value:g}" if isinstance(value, float) else str(value)
+            parts += [text] if p.kind == "argument" else [p.flag, text]
+    return shlex.join(parts)

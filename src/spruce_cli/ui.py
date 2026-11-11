@@ -123,7 +123,7 @@ def _empty(text: str) -> None:
     ui.label(text).classes("text-gray-500 italic")
 
 
-def _sites_tab(session: Path, act: Act) -> None:
+def _sites_tab(session: Path, act: Act, picked: list[str]) -> None:
     f = SiteFilter()
 
     ui.button(
@@ -180,6 +180,7 @@ def _sites_tab(session: Path, act: Act) -> None:
         flags = ui.label().classes("font-mono text-sm select-all break-all")  # fallback if the clipboard is blocked
         table = _table(rows, filename="sites.csv", selection=True)
         assert table is not None
+        table.on_select(lambda: picked.__setitem__(slice(None), [r["Url"] for r in table.selected]))
 
         def selected() -> list[dict[str, Any]]:
             if not table.selected:
@@ -431,6 +432,72 @@ def _cleanup_tab(session: Path) -> None:
     _table(rows, row_key="SiteUrl", filename="cleanup-summary.csv")
 
 
+def _command_tab(session: Path, profile: str | None, picked: list[str]) -> None:
+    """Build a CLI command from its options, to run in a terminal (the dashboard never runs these)."""
+    commands = dashboard.cli_commands()
+    ui.label(
+        "Build any spruce command with its options and copy it to run in a terminal. "
+        "The options come from the CLI itself; the session and profile are filled in."
+    ).classes("text-sm text-gray-600")
+    choice = ui.select(list(commands), value="quota apply", label="Command", with_input=True).classes("w-72")
+
+    @ui.refreshable
+    def form() -> None:
+        path = choice.value
+        help_text, params = commands[path]
+        ui.label(help_text).classes("font-medium")
+        if path in dashboard.CHANGES_TENANT:
+            ui.label("Changes the tenant: run it with --dry-run first, then without it.").classes(
+                "text-sm text-white bg-[#d03b3b] rounded px-2 py-1"
+            )
+        fields: dict[str, Any] = {}
+        output = ui.code("", language="bash").classes("w-full")
+        missing = ui.label().classes("text-sm text-[#d03b3b]")
+
+        def update() -> None:
+            values = {name: element.value for name, element in fields.items()}
+            output.set_content(dashboard.build_command(path, params, values, session.name, profile))
+            needed = [p.flag or p.name for p in params if p.required and values.get(p.name) in (None, "")]
+            missing.text = f"Still required: {', '.join(needed)}" if needed else ""
+
+        with ui.grid(columns="repeat(auto-fill, minmax(18rem, 1fr))").classes("w-full gap-x-6 gap-y-2"):
+            for p in params:
+                label = (p.flag or p.name) + (" *" if p.required else "")
+                if p.kind == "flag":
+                    on = bool(p.default) or (p.name == "dry_run" and path in dashboard.CHANGES_TENANT)
+                    element: Any = ui.checkbox(label, value=on)
+                elif p.kind == "choice":
+                    element = ui.select(p.choices, value=p.default, label=label, clearable=not p.required)
+                elif p.kind == "multi":
+                    element = ui.textarea(label, placeholder="one per line").props("autogrow")
+                else:
+                    placeholder = "" if p.default in (None, "", 0, False) else str(p.default)
+                    element = ui.input(label, placeholder=placeholder)
+                if p.help:
+                    element.tooltip(p.help)
+                element.on_value_change(update)
+                fields[p.name] = element
+
+        if "site" in fields:
+
+            def use_selection() -> None:
+                if not picked:
+                    ui.notify("Select sites in the Sites tab first", type="warning")
+                    return
+                fields["site"].value = "\n".join(picked)
+
+            ui.button("Use the sites selected in the Sites tab", icon="checklist", on_click=use_selection).props(
+                "outline dense no-caps"
+            )
+        ui.label("Hover an option for its help; 'spruce <command> --help' shows them all.").classes(
+            "text-xs text-gray-500"
+        )
+        update()
+
+    choice.on_value_change(form.refresh)
+    form()
+
+
 def _session_tab(session: Path) -> None:
     info = dashboard.session_info(session)
     meta = info["meta"]
@@ -460,6 +527,8 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
         ui.colors(primary=SERIES[0])
         ui.query("body").style("background-color: #fcfcfb; color: #0b0b0b")
         current = {"session": start}
+        picked: list[str] = []  # sites selected in the Sites tab, for the command builder
+        profile = config.profile if config.profile != "default" else None
 
         with ui.header().classes("items-center gap-4 bg-white text-black border-b"):
             ui.label("spruce").classes("text-xl font-semibold")
@@ -527,11 +596,12 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
         def body() -> None:
             session = current["session"]
             tabs_spec = [
-                ("Sites", lambda s: _sites_tab(s, act)),
+                ("Sites", lambda s: _sites_tab(s, act, picked)),
                 ("Quota plans", _quota_tab),
                 ("Version reports", lambda s: _reports_tab(s, act)),
                 ("Version simulation", _whatif_tab),
                 ("Recycle bin & holds", _cleanup_tab),
+                ("Command builder", lambda s: _command_tab(s, profile, picked)),
                 ("Session", _session_tab),
             ]
             with ui.tabs().classes("w-full") as tabs:

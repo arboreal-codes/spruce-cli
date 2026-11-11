@@ -262,6 +262,12 @@ código que la CLI, de a una, con su salida en una ventana de log, y quedan anot
 `history.log` de la sesión. El panel también crea sesiones y guarda planes de quota ("Save
 plan"). Nunca cambia quotas ni políticas de versiones ni borra nada: para eso, la CLI.
 
+La pestaña "Command builder" ayuda con eso: elegís cualquier comando, completás sus opciones
+(salen de la propia CLI, con la ayuda de cada una al pasar el mouse) y copiás el comando, con la
+sesión y el perfil ya puestos. Los sitios seleccionados en la pestaña Sites pueden completar
+`--site`, y los comandos que cambian el tenant arrancan con `--dry-run` marcado. Las comillas son
+las de shells de macOS/Linux; en PowerShell de Windows, revisalas antes de correrlo.
+
 ```bash
 uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui
 ```

@@ -77,3 +77,18 @@ def test_whatif_converts_to_gb(tmp_path: Path) -> None:
     rows, path = dashboard.whatif(session)
     assert path is not None
     assert rows[0]["FreedGB"] == 2.0 and rows[0]["SustainableFreedGB"] == 1.0 and "FreedMB" not in rows[0]
+
+
+def test_command_builder_reads_cli_and_quotes() -> None:
+    commands = dashboard.cli_commands()
+    assert "ui" not in commands and "versions trim" in commands
+    _, params = commands["versions trim"]
+    kinds = {p.name: p.kind for p in params}
+    assert kinds["mode"] == "choice" and kinds["site"] == "multi" and kinds["dry_run"] == "flag"
+    values = {"mode": "count", "site": f"{BASE}/a\n\n{BASE}/b", "major_version_limit": "100", "dry_run": True}
+    assert dashboard.build_command("versions trim", params, values, "s1", "acme") == (
+        f"spruce -p acme -s s1 versions trim --mode count --site {BASE}/a --site {BASE}/b "
+        "--major-version-limit 100 --dry-run"
+    )
+    _, params = commands["session new"]
+    assert dashboard.build_command("session new", params, {"name": "my run"}) == "spruce session new 'my run'"
