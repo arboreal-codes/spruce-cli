@@ -1,4 +1,4 @@
-# La estrategia detrás de spruce
+# 🌲 La estrategia detrás de spruce
 
 [English](strategy.md) | **Español**
 

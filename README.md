@@ -1,4 +1,4 @@
-# spruce
+# 🌲 spruce
 
 **English** | [Español](README.es.md)
 
