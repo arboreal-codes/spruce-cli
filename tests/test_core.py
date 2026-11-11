@@ -67,5 +67,6 @@ def test_sessions_are_isolated_and_resolvable(tmp_path: Path) -> None:
 
 def test_helpers() -> None:
     assert _csom_date("/Date(2023,5,14,7,30,33,573)/") == "2023-06-14"
+    assert _csom_date("/Date(1793765463483)/") == "2026-11-04"
     assert odata_string("it's") == "%27it%27%27s%27"
     assert server_relative("https://t.sharepoint.com/sites/a/b.csv") == "/sites/a/b.csv"
