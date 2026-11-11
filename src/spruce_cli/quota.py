@@ -39,7 +39,12 @@ def export_sites(sp: SharePoint, session: Path) -> Path:
     """One row per site with usage and quota. Excludes OneDrive and redirect sites."""
     print("Reading tenant sites...")
     rows: list[dict[str, Any]] = []
-    for site in sp.list_sites():
+    sites = sp.list_sites()
+    # Private/shared channel sites point to their team's group through RelatedGroupId.
+    teams = {
+        _guid(s.get("GroupId")): s.get("Title", "") for s in sites if str(s.get("Template", "")).startswith("GROUP")
+    }
+    for site in sites:
         url = str(site.get("Url", "")).rstrip("/")
         template = str(site.get("Template", ""))
         hostname = (urlparse(url).hostname or "").lower()
@@ -51,6 +56,9 @@ def export_sites(sp: SharePoint, session: Path) -> Path:
             {
                 "Url": url,
                 "Title": site.get("Title", ""),
+                "ParentTeam": teams.get(_guid(site.get("RelatedGroupId")), "")
+                if template.startswith("TEAMCHANNEL")
+                else "",
                 "Template": template,
                 "GroupId": _guid(site.get("GroupId")),
                 "LockState": site.get("LockState", ""),
