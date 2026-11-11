@@ -1,17 +1,25 @@
 """Local dashboard (NiceGUI), started by `spruce ui`.
 
-Works on session files only and never calls SharePoint. The only things it writes are new
-sessions and quota plans, the same files the CLI writes.
+Views work on session files only. Actions that call SharePoint (export, version reports,
+cleanup analysis) run the same functions as the CLI, one at a time, with their output streamed
+to a log dialog. Nothing here changes quotas, policies or deletes content.
 """
 
+import asyncio
+import contextlib
+import io
+import queue
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
+from nicegui import run as nicegui_run
 from nicegui import ui
 
-from spruce_cli import dashboard
-from spruce_cli.common import Config, UserError, create_session, list_sessions, resolve_session
+from spruce_cli import cleanup, dashboard, quota, versions
+from spruce_cli.common import Config, UserError, create_session, list_sessions, log_command, resolve_session
+from spruce_cli.sharepoint import SharePoint
 from spruce_cli.strategies import STRATEGIES, QuotaOptions
 from spruce_cli.targets import DONE_RULES, SiteFilter
 
@@ -20,6 +28,43 @@ SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
 NEUTRAL = "#a8a6a0"
 STATUS_COLORS = {"OverCap": "#d03b3b", "UnderCap": "#2a78d6"}  # anything else (Fixed...) is neutral
 TOP_SITES = 25
+
+
+# Runs a SharePoint action: (title, session, CLI argv for history.log, function of the SharePoint client).
+Act = Callable[[str, Path, list[str], Callable[[SharePoint], object]], Awaitable[None]]
+
+
+class _LineWriter(io.TextIOBase):
+    """File-like object that hands complete lines to a queue (print() output from a worker thread)."""
+
+    def __init__(self, sink: queue.SimpleQueue[str]) -> None:
+        self.sink, self.buffer = sink, ""
+
+    def write(self, text: str) -> int:
+        self.buffer += text
+        *lines, self.buffer = self.buffer.split("\n")
+        for line in lines:
+            self.sink.put(line)
+        return len(text)
+
+    def flush(self) -> None:
+        if self.buffer:
+            self.sink.put(self.buffer)
+            self.buffer = ""
+
+
+def _capture(fn: Callable[[], object], sink: queue.SimpleQueue[str]) -> None:
+    """Run fn with its printed output sent to sink; errors become the last line."""
+    # ponytail: redirect_stdout is process-wide, so only one action runs at a time (see the lock in run()).
+    writer = _LineWriter(sink)
+    with contextlib.redirect_stdout(writer):
+        try:
+            fn()
+            print("Done.")
+        except Exception as error:  # noqa: BLE001 - shown to the user, the server keeps running
+            print(f"ERROR: {error}")
+        finally:
+            writer.flush()
 
 
 def _label(row: dict[str, Any]) -> str:
@@ -78,8 +123,14 @@ def _empty(text: str) -> None:
     ui.label(text).classes("text-gray-500 italic")
 
 
-def _sites_tab(session: Path) -> None:
+def _sites_tab(session: Path, act: Act) -> None:
     f = SiteFilter()
+
+    ui.button(
+        "Export sites from SharePoint",
+        icon="cloud_download",
+        on_click=lambda: act("Export sites", session, ["sites", "export"], lambda sp: quota.export_sites(sp, session)),
+    ).props("outline no-caps")
 
     with ui.row().classes("items-end gap-4 flex-wrap"):
         status = ui.select(["OverCap", "UnderCap"], label="Status", multiple=True, clearable=True).classes("w-48")
@@ -124,6 +175,8 @@ def _sites_tab(session: Path) -> None:
         with ui.row().classes("gap-2"):
             copy = ui.button("Copy as --site", icon="content_copy").props("outline dense no-caps")
             save = ui.button("Download selected (for --exclude-file)", icon="download").props("outline dense no-caps")
+            reports = ui.button("Request version reports", icon="history").props("outline dense no-caps")
+            analyze = ui.button("Analyze recycle bins & holds", icon="delete_sweep").props("outline dense no-caps")
         flags = ui.label().classes("font-mono text-sm select-all break-all")  # fallback if the clipboard is blocked
         table = _table(rows, filename="sites.csv", selection=True)
         assert table is not None
@@ -143,8 +196,46 @@ def _sites_tab(session: Path) -> None:
             if rows_ := selected():
                 ui.download.content(dashboard.to_csv(rows_), "sites-selected.csv")
 
+        def site_flags(urls: list[str]) -> list[str]:
+            return [arg for u in urls for arg in ("--site", u)]
+
+        async def request_reports() -> None:
+            if not (urls := [r["Url"] for r in selected()]):
+                return
+            with ui.dialog() as confirm, ui.card().classes("w-[32rem]"):
+                ui.label(f"Request version reports for {len(urls)} sites?").classes("text-lg font-medium")
+                ui.label(
+                    "Creates a 'VersionReports' library in each site if missing and queues a report job "
+                    "(1 or more days). Sites with a job still running in any session are skipped."
+                ).classes("text-sm text-gray-600")
+                with ui.row().classes("w-full justify-end"):
+                    ui.button("Cancel", on_click=lambda: confirm.submit(None)).props("flat no-caps")
+                    ui.button("Dry run", on_click=lambda: confirm.submit(True)).props("outline no-caps")
+                    ui.button("Request", on_click=lambda: confirm.submit(False)).props("no-caps")
+            dry_run = await confirm
+            if dry_run is None:
+                return
+            argv = ["versions", "report-start", *site_flags(urls), *(["--dry-run"] if dry_run else [])]
+            await act(
+                "Request version reports" + (" (dry run)" if dry_run else ""),
+                session,
+                argv,
+                lambda sp: versions.start_reports(sp, session, session.parent, urls, "VersionReports", dry_run, False),
+            )
+
+        async def analyze_cleanup() -> None:
+            if urls := [r["Url"] for r in selected()]:
+                await act(
+                    "Analyze recycle bins & holds",
+                    session,
+                    ["cleanup", "analyze", *site_flags(urls)],
+                    lambda sp: cleanup.analyze(sp, session, urls, False),
+                )
+
         copy.on_click(copy_flags)
         save.on_click(save_selected)
+        reports.on_click(request_reports)
+        analyze.on_click(analyze_cleanup)
 
     def apply() -> None:
         f.status = ",".join(status.value or []) or None
@@ -279,7 +370,18 @@ def _whatif_tab(session: Path) -> None:
     chart()
 
 
-def _reports_tab(session: Path) -> None:
+def _reports_tab(session: Path, act: Act) -> None:
+    if (session / versions.JOBS_FILE).exists():
+        ui.button(
+            "Check jobs and download finished reports",
+            icon="cloud_download",
+            on_click=lambda: act(
+                "Receive version reports",
+                session,
+                ["versions", "report-receive"],
+                lambda sp: versions.receive_reports(sp, session),
+            ),
+        ).props("outline no-caps")
     jobs = dashboard.report_jobs(session.parent)
     if not jobs:
         _empty("No version reports requested yet. Run 'spruce versions report-start'.")
@@ -300,7 +402,7 @@ def _reports_tab(session: Path) -> None:
         if not rows:
             _empty("No report jobs in this session.")
             return
-        ui.label("Run 'spruce versions report-receive' to refresh pending jobs (reports take 1 or more days).").classes(
+        ui.label("Reports take 1 or more days; check again later to refresh pending jobs.").classes(
             "text-sm text-gray-600"
         )
         _table(rows, row_key="SiteUrl", filename="version-report-jobs.csv")
@@ -351,6 +453,8 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
         raise UserError("No sessions yet. Create one with: spruce session new <name>")
     start = resolve_session(config, session_name)
 
+    busy = asyncio.Lock()  # one SharePoint action at a time, for every browser tab
+
     @ui.page("/")
     def index() -> None:
         ui.colors(primary=SERIES[0])
@@ -361,6 +465,17 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
             ui.label("spruce").classes("text-xl font-semibold")
             ui.label(f"profile: {config.profile}").classes("text-gray-600")
             ui.space()
+
+            @ui.refreshable
+            def account() -> None:
+                if user := dashboard.signed_in_account(config):
+                    ui.label(user).classes("text-sm text-gray-600")
+                else:
+                    ui.button(
+                        "Log in", icon="login", on_click=lambda: act("Log in", None, [], lambda sp: sp.login())
+                    ).props("flat no-caps")
+
+            account()
             names = [p.name for p in list_sessions(config)]
             picker = ui.select(names, value=start.name, label="Session").classes("w-96")
             ui.button(icon="add", on_click=lambda: dialog.open()).props("flat round").tooltip("New session")
@@ -384,13 +499,37 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
                 ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
                 ui.button("Create", on_click=create).props("no-caps")
 
+        lines: queue.SimpleQueue[str] = queue.SimpleQueue()
+        with ui.dialog().props("persistent") as log_dialog, ui.card().classes("w-[48rem] max-w-full"):
+            log_title = ui.label().classes("text-lg font-medium")
+            log = ui.log(max_lines=2000).classes("w-full h-96 font-mono text-xs")
+            close = ui.button("Close", on_click=log_dialog.close).props("no-caps")
+        ui.timer(0.2, lambda: [log.push(lines.get()) for _ in range(lines.qsize())])
+
+        async def act(title: str, session: Path | None, argv: list[str], fn: Callable[[SharePoint], object]) -> None:
+            if busy.locked():
+                ui.notify("Another action is still running", type="warning")
+                return
+            async with busy:
+                log.clear()
+                log_title.text = title
+                close.disable()
+                log_dialog.open()
+                if session is not None and argv:
+                    log_command(session, [*argv, " # from spruce ui"])
+                await nicegui_run.io_bound(_capture, lambda: fn(SharePoint(config)), lines)
+                await asyncio.sleep(0.3)  # let the timer flush the last lines
+                close.enable()
+            account.refresh()
+            body.refresh()
+
         @ui.refreshable
         def body() -> None:
             session = current["session"]
             tabs_spec = [
-                ("Sites", _sites_tab),
+                ("Sites", lambda s: _sites_tab(s, act)),
                 ("Quota plans", _quota_tab),
-                ("Version reports", _reports_tab),
+                ("Version reports", lambda s: _reports_tab(s, act)),
                 ("Version simulation", _whatif_tab),
                 ("Recycle bin & holds", _cleanup_tab),
                 ("Session", _session_tab),

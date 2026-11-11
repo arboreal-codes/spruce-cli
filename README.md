@@ -235,9 +235,15 @@ A local dashboard over the session files: sites with the same filters and exclus
 CLI, all quota strategies compared side by side with the options you type, version report jobs
 of every session, the version simulation and the recycle bin / Preservation Hold analysis.
 
-It never calls SharePoint. The only files it writes are new sessions and quota plans ("Save
-plan"), the same ones the CLI writes. Select sites in the table to copy them as `--site`
-options or download them as a CSV for `--exclude-file`; every table has a CSV download.
+Select sites in the table to copy them as `--site` options, download them as a CSV for
+`--exclude-file`, request their version reports or analyze their recycle bins; every table has a
+CSV download.
+
+The views only read session files. Actions that call SharePoint (log in, export sites, request
+and receive version reports, cleanup analysis) run the same code as the CLI, one at a time, with
+their output in a log window, and are recorded in the session's `history.log`. The dashboard
+also writes new sessions and quota plans ("Save plan"). It never changes quotas or version
+policies and never deletes anything: use the CLI for that.
 
 ```bash
 uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui

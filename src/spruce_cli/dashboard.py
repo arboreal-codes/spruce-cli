@@ -7,7 +7,9 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from spruce_cli.common import UserError, latest_file, log_command, read_csv
+import msal
+
+from spruce_cli.common import Config, UserError, latest_file, log_command, read_csv
 from spruce_cli.quota import build_plan, plan_quotas
 from spruce_cli.strategies import STRATEGIES, QuotaOptions
 from spruce_cli.targets import SiteFilter, candidate_sites, exclusion_reasons, filter_sites
@@ -175,3 +177,13 @@ def cleanup(session: Path) -> tuple[list[dict[str, Any]], Path | None]:
             }
         )
     return sorted(out, key=lambda r: -(r["RecycleStage1GB"] + r["RecycleStage2GB"] + r["PreservationHoldGB"])), path
+
+
+def signed_in_account(config: Config) -> str | None:
+    """Account in the login cache, read without network calls (None if not logged in)."""
+    if not config.token_cache.exists():
+        return None
+    cache = msal.SerializableTokenCache()
+    cache.deserialize(config.token_cache.read_text(encoding="utf-8"))
+    accounts = list(cache.search(msal.TokenCache.CredentialType.ACCOUNT))
+    return accounts[0].get("username") if accounts else None

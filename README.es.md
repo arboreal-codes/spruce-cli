@@ -252,9 +252,15 @@ la CLI, todas las estrategias de quota comparadas lado a lado con las opciones q
 pedidos de reportes de versiones de todas las sesiones, la simulación de versiones y el análisis
 de papeleras / Preservation Hold.
 
-Nunca llama a SharePoint. Solo escribe sesiones nuevas y planes de quota ("Save plan"), los
-mismos archivos que escribe la CLI. Seleccionando sitios en la tabla se copian como opciones
-`--site` o se descargan como CSV para `--exclude-file`; todas las tablas se pueden bajar en CSV.
+Los sitios seleccionados en la tabla se pueden copiar como opciones `--site`, bajar como CSV
+para `--exclude-file`, pedirles el reporte de versiones o analizar sus papeleras; todas las
+tablas se pueden bajar en CSV.
+
+Las vistas solo leen archivos de la sesión. Las acciones que llaman a SharePoint (login,
+exportar sitios, pedir y recibir reportes de versiones, análisis de papeleras) corren el mismo
+código que la CLI, de a una, con su salida en una ventana de log, y quedan anotadas en el
+`history.log` de la sesión. El panel también crea sesiones y guarda planes de quota ("Save
+plan"). Nunca cambia quotas ni políticas de versiones ni borra nada: para eso, la CLI.
 
 ```bash
 uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui
