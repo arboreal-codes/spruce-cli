@@ -1,10 +1,11 @@
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from spruce_cli.common import Config, UserError, create_session, read_csv, resolve_session
 from spruce_cli.quota import _csom_date, build_plan, export_sites
-from spruce_cli.sharepoint import odata_string, server_relative
+from spruce_cli.sharepoint import SharePoint, odata_string, server_relative
 from spruce_cli.strategies import STRATEGIES, QuotaOptions, water_fill_cap
 
 GB = 1024
@@ -88,5 +89,5 @@ def test_export_sites_names_the_parent_team_of_channel_sites(tmp_path: Path) -> 
                  "Template": "SITEPAGEPUBLISHING#0", "GroupId": zero, "RelatedGroupId": zero},
             ]  # fmt: skip
 
-    rows = {r["Title"]: r["ParentTeam"] for r in read_csv(export_sites(FakeSharePoint(), tmp_path))}  # type: ignore[arg-type]
+    rows = {r["Title"]: r["ParentTeam"] for r in read_csv(export_sites(cast(SharePoint, FakeSharePoint()), tmp_path))}
     assert rows == {"Finance": "", "Finance-Cash": "Finance", "Intranet": ""}
