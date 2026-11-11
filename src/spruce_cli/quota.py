@@ -4,6 +4,7 @@ import math
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from spruce_cli.common import (
     UserError,
@@ -38,7 +39,9 @@ def export_sites(sp: SharePoint, session: Path) -> Path:
     for site in sp.list_sites():
         url = str(site.get("Url", "")).rstrip("/")
         template = str(site.get("Template", ""))
-        if template.startswith(("RedirectSite", "SPSPERS")) or "-my.sharepoint.com" in url:
+        hostname = (urlparse(url).hostname or "").lower()
+        is_onedrive_host = re.fullmatch(r"(?:[a-z0-9-]+\.)*[a-z0-9-]*-my\.sharepoint\.com", hostname) is not None
+        if template.startswith(("RedirectSite", "SPSPERS")) or is_onedrive_host:
             continue
         used = int(site.get("StorageUsage") or 0)
         rows.append(
