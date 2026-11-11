@@ -143,6 +143,22 @@ def _keep(row: dict[str, Any], f: SiteFilter, today: date) -> bool:
     return True
 
 
+def exclusion_reasons(urls: list[str], sessions_dir: Path, f: SiteFilter, command: str) -> dict[str, str]:
+    """URL -> why it is left out: 'excluded', or 'done in <session>' (only with skip_done)."""
+    patterns = [_norm(p) for p in f.exclude]
+    for path in f.exclude_file:
+        patterns += [_norm(u) for u in read_exclude_file(path)]
+    done = done_sites(sessions_dir, command) if f.skip_done else {}
+    reasons: dict[str, str] = {}
+    for url in urls:
+        key = _norm(url)
+        if any(fnmatch.fnmatch(key, p) for p in patterns):
+            reasons[url] = "excluded"
+        elif key in done:
+            reasons[url] = f"done in {done[key]}"
+    return reasons
+
+
 def select_sites(session: Path, sessions_dir: Path, f: SiteFilter, command: str) -> list[str]:
     """Apply filters, then exclusions; print why sites were left out. Largest sites first."""
     info: dict[str, dict[str, Any]] = {}
@@ -161,18 +177,11 @@ def select_sites(session: Path, sessions_dir: Path, f: SiteFilter, command: str)
         urls = [r["Url"].rstrip("/") for r in rows]
         info = {r["Url"].rstrip("/"): r for r in rows}
 
-    patterns = [_norm(p) for p in f.exclude]
-    for path in f.exclude_file:
-        patterns += [_norm(u) for u in read_exclude_file(path)]
-    done = done_sites(sessions_dir, command) if f.skip_done else {}
-
+    skipped = exclusion_reasons(urls, sessions_dir, f, command)
     selected: list[str] = []
     for url in dict.fromkeys(urls):
-        key = _norm(url)
-        if any(fnmatch.fnmatch(key, p) for p in patterns):
-            print(f"  excluded  {url}")
-        elif key in done:
-            print(f"  done      {url}  (session {done[key]})")
+        if url in skipped:
+            print(f"  skipped   {url}  ({skipped[url]})")
         else:
             selected.append(url)
             row = info.get(url, {})

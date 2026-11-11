@@ -148,7 +148,7 @@ Dentro de una sesión, los comandos toman por defecto su último archivo de entr
 | 6. Recorte               | `spruce versions trim --site URL --mode count --major-version-limit 100`           |
 | 6. Papeleras             | `spruce cleanup analyze --status OverCap` / `cleanup purge-recycle-bin`            |
 | Cualquiera               | `spruce sites select ...` muestra qué sitios elige una selección                   |
-| Cualquiera               | `spruce ui` abre el [panel web](#panel-web) (solo lectura)                         |
+| Cualquiera               | `spruce ui` abre el [panel web](#panel-web)                                        |
 
 `spruce --help` y `spruce <comando> --help` listan todas las opciones. Qué hace cada paso y
 por qué está en [docs/strategy.es.md](docs/strategy.es.md).
@@ -247,9 +247,14 @@ spruce cleanup purge-recycle-bin --site URL --stage 2 --older-than-days 30 --dry
 
 ## Panel web
 
-Un panel local, de solo lectura, sobre los archivos de la sesión: sitios con los mismos filtros
-que la CLI, todas las estrategias de quota comparadas lado a lado con las opciones que escribas,
-la simulación de versiones y el análisis de papeleras / Preservation Hold. Nunca llama a SharePoint.
+Un panel local sobre los archivos de la sesión: sitios con los mismos filtros y exclusiones que
+la CLI, todas las estrategias de quota comparadas lado a lado con las opciones que escribas, los
+pedidos de reportes de versiones de todas las sesiones, la simulación de versiones y el análisis
+de papeleras / Preservation Hold.
+
+Nunca llama a SharePoint. Solo escribe sesiones nuevas y planes de quota ("Save plan"), los
+mismos archivos que escribe la CLI. Seleccionando sitios en la tabla se copian como opciones
+`--site` o se descargan como CSV para `--exclude-file`; todas las tablas se pueden bajar en CSV.
 
 ```bash
 uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui

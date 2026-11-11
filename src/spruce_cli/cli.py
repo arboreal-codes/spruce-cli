@@ -247,7 +247,7 @@ def web_ui(
     port: Annotated[int, typer.Option(help="Local port.")] = 8765,
     browser: Annotated[bool, typer.Option(help="Open the browser.")] = True,
 ) -> None:
-    """Open a read-only dashboard of the sessions in the browser (needs the 'ui' extra)."""
+    """Open a local dashboard of the sessions in the browser (needs the 'ui' extra)."""
     try:
         from spruce_cli import ui
     except ImportError as error:

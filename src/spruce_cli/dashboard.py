@@ -1,13 +1,17 @@
 """Read-only data for the web UI: everything here works on session files, offline."""
 
+import csv
+import io
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from spruce_cli.common import UserError, latest_file, read_csv
-from spruce_cli.quota import build_plan
+from spruce_cli.common import UserError, latest_file, log_command, read_csv
+from spruce_cli.quota import build_plan, plan_quotas
 from spruce_cli.strategies import STRATEGIES, QuotaOptions
-from spruce_cli.targets import SiteFilter, candidate_sites, filter_sites
+from spruce_cli.targets import SiteFilter, candidate_sites, exclusion_reasons, filter_sites
+from spruce_cli.versions import JOBS_FILE
 
 
 def _float(value: object) -> float:
@@ -35,14 +39,24 @@ def session_info(session: Path) -> dict[str, Any]:
     }
 
 
-def sites(session: Path, site_filter: SiteFilter) -> list[dict[str, Any]]:
-    """Filtered sites with numeric GB columns for tables and charts. Empty if the session has no site data."""
+def sites(
+    session: Path, site_filter: SiteFilter, command: str = "cleanup"
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Filtered sites with numeric GB columns, and the ones left out by exclusions (Url, Reason).
+
+    `command` picks what "already done" means for skip_done (see targets.DONE_RULES).
+    Both lists are empty if the session has no site data.
+    """
     try:
         rows, _ = candidate_sites(session, site_filter)
     except UserError:
-        return []
+        return [], []
+    rows = filter_sites(rows, site_filter)
+    reasons = exclusion_reasons([r["Url"] for r in rows], session.parent, site_filter, command)
     out = []
-    for row in filter_sites(rows, site_filter):
+    for row in rows:
+        if row["Url"] in reasons:
+            continue
         out.append(
             {
                 "Url": row.get("Url", ""),
@@ -56,7 +70,7 @@ def sites(session: Path, site_filter: SiteFilter) -> list[dict[str, Any]]:
                 "ExcessGB": round(_float(row.get("ExcessMB")) / 1024, 2),
             }
         )
-    return out
+    return out, [{"Url": url, "Reason": reason} for url, reason in reasons.items()]
 
 
 def filter_flags(site_filter: SiteFilter) -> str:
@@ -74,7 +88,36 @@ def filter_flags(site_filter: SiteFilter) -> str:
         parts.append(f"--inactive-days {site_filter.inactive_days}")
     if site_filter.top is not None:
         parts.append(f"--top {site_filter.top}")
+    parts += [f"--exclude '{e}'" for e in site_filter.exclude]
+    if site_filter.skip_done:
+        parts.append("--skip-done")
     return " ".join(parts) or "--all"
+
+
+def report_jobs(sessions_dir: Path) -> list[dict[str, str]]:
+    """Version report jobs of every session (Session column first), newest request first."""
+    rows = [
+        {"Session": path.parent.name, **row} for path in sessions_dir.glob(f"*/{JOBS_FILE}") for row in read_csv(path)
+    ]
+    return sorted(rows, key=lambda r: r.get("RequestedAt", ""), reverse=True)
+
+
+def to_csv(rows: list[dict[str, Any]]) -> str:
+    """Rows as CSV text, for downloads (same format as the session files)."""
+    out = io.StringIO()
+    if rows:
+        writer = csv.DictWriter(out, fieldnames=list(rows[0]), lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+    return out.getvalue()
+
+
+def save_plan(session: Path, options: QuotaOptions, strategy: str) -> Path:
+    """Write a quota plan to the session, exactly as 'spruce quota plan' does."""
+    storage = latest_file(session, "site-storage")
+    flags = [f"--{k.replace('_', '-')} {v:g}" for k, v in asdict(options).items()]
+    log_command(session, ["quota", "plan", *flags, "--strategy", strategy, " # from spruce ui"])
+    return plan_quotas(session, storage, options, strategy, None)
 
 
 def saved_plans(session: Path) -> list[dict[str, Any]]:

@@ -139,7 +139,7 @@ the commands run in it.
 | 6. Trim            | `spruce versions trim --site URL --mode count --major-version-limit 100`           |
 | 6. Recycle bins    | `spruce cleanup analyze --status OverCap` / `cleanup purge-recycle-bin`            |
 | Any                | `spruce sites select ...` previews a site selection                                |
-| Any                | `spruce ui` opens the [web dashboard](#web-dashboard) (read-only)                  |
+| Any                | `spruce ui` opens the [web dashboard](#web-dashboard)                              |
 
 `spruce --help` and `spruce <command> --help` list every option. What each step does and why
 is in [docs/strategy.md](docs/strategy.md).
@@ -231,9 +231,13 @@ spruce cleanup purge-recycle-bin --site URL --stage 2 --older-than-days 30 --dry
 
 ## Web dashboard
 
-A local, read-only dashboard over the session files: sites with the same filters as the CLI,
-all quota strategies compared side by side with the options you type, the version simulation
-and the recycle bin / Preservation Hold analysis. It never calls SharePoint.
+A local dashboard over the session files: sites with the same filters and exclusions as the
+CLI, all quota strategies compared side by side with the options you type, version report jobs
+of every session, the version simulation and the recycle bin / Preservation Hold analysis.
+
+It never calls SharePoint. The only files it writes are new sessions and quota plans ("Save
+plan"), the same ones the CLI writes. Select sites in the table to copy them as `--site`
+options or download them as a CSV for `--exclude-file`; every table has a CSV download.
 
 ```bash
 uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui

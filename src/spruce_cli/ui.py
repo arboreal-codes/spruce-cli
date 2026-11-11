@@ -1,4 +1,8 @@
-"""Local read-only dashboard (NiceGUI). Started by `spruce ui`; reads session files only."""
+"""Local dashboard (NiceGUI), started by `spruce ui`.
+
+Works on session files only and never calls SharePoint. The only things it writes are new
+sessions and quota plans, the same files the CLI writes.
+"""
 
 from collections import defaultdict
 from pathlib import Path
@@ -7,9 +11,9 @@ from typing import Any
 from nicegui import ui
 
 from spruce_cli import dashboard
-from spruce_cli.common import Config, UserError, list_sessions, resolve_session
+from spruce_cli.common import Config, UserError, create_session, list_sessions, resolve_session
 from spruce_cli.strategies import STRATEGIES, QuotaOptions
-from spruce_cli.targets import SiteFilter
+from spruce_cli.targets import DONE_RULES, SiteFilter
 
 # Validated categorical order (blue, orange, aqua, yellow) plus reserved status colors.
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
@@ -22,14 +26,29 @@ def _label(row: dict[str, Any]) -> str:
     return row.get("Title") or str(row.get("Url") or row.get("SiteUrl") or "").rstrip("/").rsplit("/", 1)[-1]
 
 
-def _table(rows: list[dict[str, Any]], row_key: str = "Url") -> None:
+def _download(rows: list[dict[str, Any]], filename: str, label: str = "CSV") -> None:
+    ui.button(label, icon="download", on_click=lambda: ui.download.content(dashboard.to_csv(rows), filename)).props(
+        "flat dense no-caps"
+    )
+
+
+def _table(
+    rows: list[dict[str, Any]], row_key: str = "Url", filename: str = "spruce.csv", selection: bool = False
+) -> ui.table | None:
+    """Sortable, paginated table with a CSV download of all its rows."""
     if not rows:
-        return
+        return None
     columns: list[dict[str, Any]] = [
         {"name": k, "label": k, "field": k, "sortable": True, "align": "left"} for k in rows[0]
     ]
     key = row_key if row_key in rows[0] else columns[0]["name"]
-    ui.table(rows=rows, columns=columns, row_key=key, pagination=20).classes("w-full").props("dense flat bordered")
+    with ui.row().classes("w-full justify-end -mb-2"):
+        _download(rows, filename)
+    table = ui.table(
+        rows=rows, columns=columns, row_key=key, pagination=20, selection="multiple" if selection else None
+    )
+    table.classes("w-full").props("dense flat bordered")
+    return table
 
 
 def _bar_chart(categories: list[str], series: list[dict[str, Any]], unit: str = "GB", height: int = 0) -> None:
@@ -70,10 +89,14 @@ def _sites_tab(session: Path) -> None:
         template = ui.input("Template (e.g. GROUP)").classes("w-40")
         inactive = ui.number("Inactive days", min=0, precision=0).classes("w-32")
         top = ui.number("Top", min=1, precision=0).classes("w-24")
+        exclude = ui.input("Exclude (URL pattern, * wildcard)").classes("w-64")
+        skip_done = ui.select(
+            {"": "Don't skip", **{c: f"Done by '{c}'" for c in DONE_RULES}}, value="", label="Skip sites already"
+        ).classes("w-48")
 
     @ui.refreshable
     def results() -> None:
-        rows = dashboard.sites(session, f)
+        rows, skipped = dashboard.sites(session, f, skip_done.value or "cleanup")
         total = sum(r["UsedGB"] for r in rows)
         with ui.row().classes("items-center gap-6"):
             ui.label(f"{len(rows)} sites · {total:,.1f} GB used").classes("text-lg font-medium")
@@ -94,7 +117,34 @@ def _sites_tab(session: Path) -> None:
         ]
         ui.label(f"Largest {len(shown)} sites by used storage").classes("text-sm text-gray-600")
         _bar_chart([_label(r) for r in shown], series)
-        _table(rows)
+        if skipped:
+            with ui.expansion(f"{len(skipped)} sites left out by exclusions").classes("w-full"):
+                _table(skipped, filename="sites-skipped.csv")
+        ui.label("Select sites to use them in a command or as an exclude list").classes("text-sm text-gray-600")
+        with ui.row().classes("gap-2"):
+            copy = ui.button("Copy as --site", icon="content_copy").props("outline dense no-caps")
+            save = ui.button("Download selected (for --exclude-file)", icon="download").props("outline dense no-caps")
+        flags = ui.label().classes("font-mono text-sm select-all break-all")  # fallback if the clipboard is blocked
+        table = _table(rows, filename="sites.csv", selection=True)
+        assert table is not None
+
+        def selected() -> list[dict[str, Any]]:
+            if not table.selected:
+                ui.notify("Select some sites first", type="warning")
+            return table.selected
+
+        def copy_flags() -> None:
+            if urls := [r["Url"] for r in selected()]:
+                flags.text = " ".join(f"--site {u}" for u in urls)
+                ui.clipboard.write(flags.text)
+                ui.notify(f"{len(urls)} --site options copied (also shown below the buttons)")
+
+        def save_selected() -> None:
+            if rows_ := selected():
+                ui.download.content(dashboard.to_csv(rows_), "sites-selected.csv")
+
+        copy.on_click(copy_flags)
+        save.on_click(save_selected)
 
     def apply() -> None:
         f.status = ",".join(status.value or []) or None
@@ -104,9 +154,11 @@ def _sites_tab(session: Path) -> None:
         f.template = [template.value] if template.value else []
         f.inactive_days = int(inactive.value) if inactive.value is not None else None
         f.top = int(top.value) if top.value is not None else None
+        f.exclude = [exclude.value] if exclude.value else []
+        f.skip_done = bool(skip_done.value)
         results.refresh()
 
-    for control in (status, min_gb, max_gb, match, template, inactive, top):
+    for control in (status, min_gb, max_gb, match, template, inactive, top, exclude, skip_done):
         control.on_value_change(apply)
     results()
 
@@ -123,22 +175,27 @@ def _quota_tab(session: Path) -> None:
         freeze = ui.number("Freeze margin %", value=defaults.freeze_margin_percent, min=0).classes("w-32")
         min_quota = ui.number("Min quota GB", value=defaults.min_quota_gb, min=1).classes("w-28")
 
-    @ui.refreshable
-    def results() -> None:
-        options = QuotaOptions(
+        strategy = ui.select(list(STRATEGIES), value=next(iter(STRATEGIES)), label="Strategy to save").classes("w-44")
+        save = ui.button("Save plan", icon="save").props("no-caps")
+
+    def options() -> QuotaOptions:
+        return QuotaOptions(
             budget_tb=budget.value or defaults.budget_tb,
             reserve_percent=reserve.value or 0,
             growth_margin_percent=growth.value or 0,
             freeze_margin_percent=freeze.value or 0,
             min_quota_gb=min_quota.value or defaults.min_quota_gb,
         )
+
+    @ui.refreshable
+    def results() -> None:
         try:
-            summaries, plans = dashboard.compare_strategies(session, options)
+            summaries, plans = dashboard.compare_strategies(session, options())
         except (UserError, ValueError) as e:
             _empty(str(e))
             return
         ui.label("All strategies with these options (in memory, nothing is saved)").classes("text-sm text-gray-600")
-        _table(summaries, row_key="Strategy")
+        _table(summaries, row_key="Strategy", filename="quota-compare.csv")
 
         first = next(iter(plans.values()))
         top_rows = sorted(first.values(), key=lambda r: -float(r["UsedMB"]))[:15]
@@ -159,11 +216,25 @@ def _quota_tab(session: Path) -> None:
         control.on_value_change(results.refresh)
     results()
 
-    ui.label("Saved plans in this session").classes("text-lg font-medium mt-6")
-    if saved:
-        _table(saved, row_key="File")
-    else:
-        _empty("None yet. Save one with 'spruce quota plan'.")
+    @ui.refreshable
+    def saved_plans() -> None:
+        ui.label("Saved plans in this session").classes("text-lg font-medium mt-6")
+        if rows := dashboard.saved_plans(session):
+            _table(rows, row_key="File", filename="quota-plans.csv")
+        else:
+            _empty("None yet. Save one above or with 'spruce quota plan'.")
+
+    def save_plan() -> None:
+        try:
+            path = dashboard.save_plan(session, options(), strategy.value)
+        except (UserError, ValueError) as e:
+            ui.notify(str(e), type="negative")
+            return
+        ui.notify(f"Saved {path.name}", type="positive")
+        saved_plans.refresh()
+
+    save.on_click(save_plan)
+    saved_plans()
 
 
 def _whatif_tab(session: Path) -> None:
@@ -202,10 +273,40 @@ def _whatif_tab(session: Path) -> None:
             "text-sm text-gray-600"
         )
         _bar_chart(scenarios, series)
-        _table([r for r in rows if site.value in (all_sites, r["SiteUrl"])], row_key="Scenario")
+        _table([r for r in rows if site.value in (all_sites, r["SiteUrl"])], row_key="Scenario", filename="whatif.csv")
 
     site.on_value_change(chart.refresh)
     chart()
+
+
+def _reports_tab(session: Path) -> None:
+    jobs = dashboard.report_jobs(session.parent)
+    if not jobs:
+        _empty("No version reports requested yet. Run 'spruce versions report-start'.")
+        return
+    only_this = ui.switch("Only this session", value=True)
+
+    @ui.refreshable
+    def view() -> None:
+        rows = [j for j in jobs if not only_this.value or j["Session"] == session.name]
+        counts: dict[str, int] = defaultdict(int)
+        for j in rows:
+            counts[j.get("Status", "")] += 1
+        with ui.row().classes("gap-2"):
+            for status, color in (("Requested", "grey"), ("InProgress", "primary"), ("Downloaded", "positive")):
+                ui.chip(f"{status}: {counts.pop(status, 0)}", color=color, text_color="white").props("dense")
+            for status, n in counts.items():
+                ui.chip(f"{status or 'Unknown'}: {n}", color="negative", text_color="white").props("dense")
+        if not rows:
+            _empty("No report jobs in this session.")
+            return
+        ui.label("Run 'spruce versions report-receive' to refresh pending jobs (reports take 1 or more days).").classes(
+            "text-sm text-gray-600"
+        )
+        _table(rows, row_key="SiteUrl", filename="version-report-jobs.csv")
+
+    only_this.on_value_change(view.refresh)
+    view()
 
 
 def _cleanup_tab(session: Path) -> None:
@@ -225,7 +326,7 @@ def _cleanup_tab(session: Path) -> None:
         for color, (name, key) in zip(SERIES, parts, strict=False)
     ]
     _bar_chart([_label(r) for r in shown], series)
-    _table(rows, row_key="SiteUrl")
+    _table(rows, row_key="SiteUrl", filename="cleanup-summary.csv")
 
 
 def _session_tab(session: Path) -> None:
@@ -262,7 +363,26 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
             ui.space()
             names = [p.name for p in list_sessions(config)]
             picker = ui.select(names, value=start.name, label="Session").classes("w-96")
+            ui.button(icon="add", on_click=lambda: dialog.open()).props("flat round").tooltip("New session")
             ui.button(icon="refresh", on_click=lambda: body.refresh()).props("flat round").tooltip("Reload files")
+
+        with ui.dialog() as dialog, ui.card().classes("w-96"):
+            ui.label("New session").classes("text-lg font-medium")
+            new_name = ui.input("Name", validation={"Required": bool}).classes("w-full")
+            new_note = ui.input("Note (optional)").classes("w-full")
+
+            def create() -> None:
+                if not new_name.value:
+                    return
+                folder = create_session(config, new_name.value, new_note.value or "")
+                picker.set_options([p.name for p in list_sessions(config)], value=folder.name)
+                new_name.value = new_note.value = ""
+                dialog.close()
+                ui.notify(f"Created {folder.name}", type="positive")
+
+            with ui.row().classes("w-full justify-end"):
+                ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                ui.button("Create", on_click=create).props("no-caps")
 
         @ui.refreshable
         def body() -> None:
@@ -270,6 +390,7 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
             tabs_spec = [
                 ("Sites", _sites_tab),
                 ("Quota plans", _quota_tab),
+                ("Version reports", _reports_tab),
                 ("Version simulation", _whatif_tab),
                 ("Recycle bin & holds", _cleanup_tab),
                 ("Session", _session_tab),
