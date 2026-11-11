@@ -252,7 +252,9 @@ def web_ui(
         from spruce_cli import ui
     except ImportError as error:
         raise UserError(
-            "The web UI needs NiceGUI. Run it with:\n"
+            "The web UI needs the [ui] extra. Install spruce with it:\n"
+            '  uv tool install --reinstall "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli"\n'
+            "or run it once without installing:\n"
             '  uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui'
         ) from error
     ui.run(state.config, state.session_name, port, browser)
