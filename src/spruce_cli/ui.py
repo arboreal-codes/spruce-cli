@@ -17,7 +17,7 @@ from typing import Any
 from nicegui import run as nicegui_run
 from nicegui import ui
 
-from spruce_cli import cleanup, dashboard, quota, versions
+from spruce_cli import cleanup, dashboard, quota, versions, whatif
 from spruce_cli.common import Config, UserError, create_session, list_sessions, log_command, resolve_session
 from spruce_cli.sharepoint import SharePoint
 from spruce_cli.strategies import STRATEGIES, QuotaOptions
@@ -329,10 +329,42 @@ def _quota_tab(session: Path) -> None:
     saved_plans()
 
 
-def _whatif_tab(session: Path) -> None:
+def _whatif_tab(session: Path, act: Act) -> None:
+    reports = session / versions.REPORTS_DIR
+    with ui.row().classes("items-end gap-4 flex-wrap"):
+        limits = ui.input("Major version limits", value="100").classes("w-40")
+        limits.tooltip("Comma list, 0 = no limit")
+        days = ui.input("Expire after days", value="0,365").classes("w-40")
+        days.tooltip("Comma list, 0 = no limit, else at least 30")
+
+        def simulate() -> Awaitable[None]:
+            plans = sorted(session.glob("quota-plan_*.csv"))  # like the CLI: latest plan, if any
+            return act(
+                "Simulate version policies",
+                session,
+                ["versions", "whatif", "--major-version-limit", limits.value, "--expire-after-days", days.value],
+                lambda _sp: whatif.run(
+                    reports,
+                    session,
+                    session / versions.JOBS_FILE,
+                    counts=whatif.int_list(limits.value),
+                    days_list=whatif.int_list(days.value),
+                    as_of=None,
+                    plan=plans[-1] if plans else None,
+                    include_file_detail=False,
+                ),
+            )
+
+        run_button = ui.button("Run simulation", icon="play_arrow", on_click=simulate).props("outline no-caps")
+        if not any(reports.glob("*.csv")):
+            run_button.disable()
+            run_button.tooltip("Receive version reports first (Version reports tab)")
+    ui.label("Offline: reads the downloaded version reports, changes nothing in SharePoint.").classes(
+        "text-sm text-gray-600"
+    )
     rows, path = dashboard.whatif(session)
     if not rows:
-        _empty("No simulation yet. Run 'spruce versions whatif' after receiving version reports.")
+        _empty("No simulation yet. Run one above after receiving version reports.")
         return
     ui.label(f"From {path.name if path else ''}").classes("text-sm text-gray-600")
     all_sites = "All sites"
@@ -524,7 +556,7 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
     def index() -> None:
         ui.colors(primary=SERIES[0])
         ui.query("body").style("background-color: #fcfcfb; color: #0b0b0b")
-        current = {"session": start}
+        current: dict[str, Any] = {"session": start, "tab": "Sites"}  # the tab survives refreshes after actions
         picked: list[str] = []  # sites selected in the Sites tab, for the command builder
         profile = config.profile if config.profile != "default" else None
 
@@ -603,14 +635,15 @@ def run(config: Config, session_name: str | None, port: int, show: bool) -> None
                 ("Sites", lambda s: _sites_tab(s, act, picked)),
                 ("Quota plans", _quota_tab),
                 ("Version reports", lambda s: _reports_tab(s, act)),
-                ("Version simulation", _whatif_tab),
+                ("Version simulation", lambda s: _whatif_tab(s, act)),
                 ("Recycle bin & holds", _cleanup_tab),
                 ("Command builder", lambda s: _command_tab(s, profile, picked)),
                 ("Session", _session_tab),
             ]
-            with ui.tabs().classes("w-full") as tabs:
+            with ui.tabs(value=current["tab"]).classes("w-full") as tabs:
                 tab_items = [ui.tab(name) for name, _ in tabs_spec]
-            with ui.tab_panels(tabs, value=tab_items[0]).classes("w-full bg-transparent"):
+            tabs.on_value_change(lambda e: current.__setitem__("tab", e.value))
+            with ui.tab_panels(tabs, value=current["tab"]).classes("w-full bg-transparent"):
                 for item, (_, render) in zip(tab_items, tabs_spec, strict=True):
                     with ui.tab_panel(item).classes("gap-4"):
                         render(session)
