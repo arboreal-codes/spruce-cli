@@ -67,8 +67,8 @@ uv tool install "spruce-cli @ git+https://github.com/arboreal-codes/spruce-cli"
 Para pasar de una a otra más adelante, correr el otro comando con `--reinstall`.
 
 Para actualizar, `uv tool upgrade spruce-cli` (mantiene la opción instalada). Para fijar una
-versión, agregar `@v0.5.0` (un tag) o `@<commit>` a la URL, como en
-`"spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli@v0.5.0"`.
+versión, agregar `@v0.6.0` (un tag) o `@<commit>` a la URL, como en
+`"spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli@v0.6.0"`.
 
 Para probar spruce sin instalarlo, usar `uvx` con el mismo paquete:
 
