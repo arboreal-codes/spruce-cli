@@ -222,6 +222,14 @@ class SharePoint:
             if not start:
                 return sites
 
+    def is_site_admin(self, site_url: str) -> bool | None:
+        """Whether the signed-in user is a site collection admin (False without access, None if unknown)."""
+        try:
+            user = self.get(f"{site_url.rstrip('/')}/_api/web/currentuser?$select=IsSiteAdmin")
+        except SharePointError as error:
+            return False if error.status in (401, 403) else None
+        return bool(user.get("IsSiteAdmin"))
+
     def site_properties(self, site_url: str) -> dict[str, Any]:
         response = self.csom(
             '<Query Id="4" ObjectPathId="3"><Query SelectAllProperties="true"><Properties /></Query></Query>',
