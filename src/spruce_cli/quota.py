@@ -2,6 +2,7 @@
 
 import math
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -59,6 +60,7 @@ def export_sites(sp: SharePoint, session: Path) -> Path:
                 "ParentTeam": teams.get(_guid(site.get("RelatedGroupId")), "")
                 if template.startswith("TEAMCHANNEL")
                 else "",
+                "IsSiteAdmin": "",  # filled below
                 "Template": template,
                 "GroupId": _guid(site.get("GroupId")),
                 "LockState": site.get("LockState", ""),
@@ -69,10 +71,19 @@ def export_sites(sp: SharePoint, session: Path) -> Path:
                 "WarningMB": int(site.get("StorageWarningLevel") or 0),
             }
         )
+    print(f"Checking site admin rights on {len(rows)} sites...")
+    # The first call runs alone so the token for the sites host is fetched (and cached) once.
+    # ponytail: then 8 parallel requests, one per site; fewer workers if SharePoint throttles.
+    urls = [r["Url"] for r in rows]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        admins = [sp.is_site_admin(u) for u in urls[:1]] + list(pool.map(sp.is_site_admin, urls[1:]))
+    for row, admin in zip(rows, admins, strict=True):
+        row["IsSiteAdmin"] = "" if admin is None else admin
     rows.sort(key=lambda r: -int(r["UsedMB"]))
     out = session / f"site-storage_{timestamp()}.csv"
     write_csv(out, rows)
     print(f"Sites: {len(rows)}  Total used: {mb_to_gb(sum(int(r['UsedMB']) for r in rows))} GB")
+    print(f"Site admin on {sum(r['IsSiteAdmin'] is True for r in rows)} of {len(rows)} sites")
     return out
 
 

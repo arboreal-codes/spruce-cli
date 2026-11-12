@@ -73,7 +73,7 @@ def test_helpers() -> None:
     assert server_relative("https://t.sharepoint.com/sites/a/b.csv") == "/sites/a/b.csv"
 
 
-def test_export_sites_names_the_parent_team_of_channel_sites(tmp_path: Path) -> None:
+def test_export_sites_adds_parent_team_and_admin_rights(tmp_path: Path) -> None:
     team = "/Guid(01317a73-5d4c-4963-9b40-4d8542ce66c6)/"
     zero = "/Guid(00000000-0000-0000-0000-000000000000)/"
 
@@ -89,5 +89,12 @@ def test_export_sites_names_the_parent_team_of_channel_sites(tmp_path: Path) -> 
                  "Template": "SITEPAGEPUBLISHING#0", "GroupId": zero, "RelatedGroupId": zero},
             ]  # fmt: skip
 
-    rows = {r["Title"]: r["ParentTeam"] for r in read_csv(export_sites(cast(SharePoint, FakeSharePoint()), tmp_path))}
-    assert rows == {"Finance": "", "Finance-Cash": "Finance", "Intranet": ""}
+        def is_site_admin(self, url: str) -> bool | None:
+            return {"Fin": True, "Fin-Cash": False}.get(url.rsplit("/", 1)[-1])  # Intranet: unknown
+
+    rows = read_csv(export_sites(cast(SharePoint, FakeSharePoint()), tmp_path))
+    assert {r["Title"]: (r["ParentTeam"], r["IsSiteAdmin"]) for r in rows} == {
+        "Finance": ("", "True"),
+        "Finance-Cash": ("Finance", "False"),
+        "Intranet": ("", ""),
+    }

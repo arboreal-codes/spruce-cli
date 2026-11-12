@@ -66,6 +66,7 @@ def sites(
                 "Url": row.get("Url", ""),
                 "Title": row.get("Title", ""),
                 "ParentTeam": row.get("ParentTeam", ""),
+                "IsSiteAdmin": row.get("IsSiteAdmin", ""),
                 "Status": row.get("Status", ""),
                 "Template": row.get("Template", ""),
                 "LastContentModifiedDate": row.get("LastContentModifiedDate", ""),
