@@ -95,7 +95,8 @@ def candidate_sites(session: Path, f: SiteFilter) -> tuple[list[dict[str, Any]],
         raise UserError("No site-storage or quota-plan in the session. Run 'spruce sites export' or pass --site.")
     sources = [p for p in (storage, plan) if p is not None]
     by_url: dict[str, dict[str, Any]] = {}
-    for source in sources:
+    # Plan first, storage last: the plan is older, so the storage export's UsedMB etc. must win
+    for source in reversed(sources):
         for row in read_csv(source):
             by_url.setdefault(_norm(row["Url"]), {}).update(row)
     if f.status and plan is None:

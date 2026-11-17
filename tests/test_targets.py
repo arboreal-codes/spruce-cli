@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 
 from spruce_cli.common import UserError
-from spruce_cli.targets import SiteFilter, select_sites
+from spruce_cli.targets import SiteFilter, candidate_sites, select_sites
 from spruce_cli.versions import pending_reports
 
 OLD = (date.today() - timedelta(days=400)).isoformat()
@@ -75,3 +75,11 @@ def test_pending_reports_across_sessions(tmp_path: Path) -> None:
         f"{BASE}/A,2026-11-01,InProgress\n{BASE}/b,2026-11-01,Downloaded\n{BASE}/c,2026-11-01,Failed\n"
     )
     assert pending_reports(tmp_path) == {f"{BASE}/a": ("20261101-000000_old", "2026-11-01")}
+
+
+def test_storage_export_wins_over_older_plan(session: Path) -> None:
+    (session / "site-storage_20261111-000000.csv").write_text(f"Url,UsedMB\n{BASE}/big,{100 * 1024}\n")
+    rows, _ = candidate_sites(session, SiteFilter())
+    big = next(r for r in rows if r["Url"].endswith("/big"))
+    assert big["UsedMB"] == str(100 * 1024)
+    assert big["Status"] == "OverCap"
