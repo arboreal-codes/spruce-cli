@@ -65,8 +65,8 @@ uv tool install --python 3.14 "spruce-cli @ git+https://github.com/arboreal-code
 To switch from one to the other later, run the other command with `--reinstall`.
 
 Update with `uv tool upgrade spruce-cli` (it keeps the option you installed). To pin a version,
-add `@v0.6.0` (a tag) or `@<commit>` to the URL, as in
-`"spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli@v0.6.0"`.
+add `@v0.6.1` (a tag) or `@<commit>` to the URL, as in
+`"spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli@v0.6.1"`.
 
 To try spruce without installing it, use `uvx` with the same package spec:
 
