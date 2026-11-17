@@ -423,7 +423,12 @@ def _reports_tab(session: Path, act: Act) -> None:
 
     @ui.refreshable
     def view() -> None:
-        rows = [j for j in jobs if not only_this.value or j["Session"] == session.name]
+        # jobs is newest first: keep only each site's latest request
+        latest: dict[str, dict[str, str]] = {}
+        for j in jobs:
+            if not only_this.value or j["Session"] == session.name:
+                latest.setdefault(j["SiteUrl"], j)
+        rows = list(latest.values())
         counts: dict[str, int] = defaultdict(int)
         for j in rows:
             counts[j.get("Status", "")] += 1
