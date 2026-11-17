@@ -2,12 +2,10 @@
 
 import json
 import time
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
 from spruce_cli.common import (
-    HOME_DIR,
     UserError,
     append_csv_row,
     confirm,
@@ -21,7 +19,6 @@ from spruce_cli.sharepoint import (
     SharePoint,
     SharePointError,
     odata_string,
-    origin,
     parse_result,
     server_relative,
 )
@@ -218,42 +215,14 @@ def set_policy(
 
 # ---------------------------------------------------------------- trim
 
+# CSOM Microsoft.SharePoint.Client.FileVersionBatchDeleteMode. Hardcoded because the tenant's
+# $metadata is OData v3 and declares no enums (BatchDeleteMode is plain Edm.Int32).
+# start_trim reads the job back and cancels it if SharePoint registered a different mode.
 TRIM_MODES = {
-    "count": "CountLimits",
-    "age": "DeleteOlderThanDays",
-    "automatic": "AutomaticTrim",
+    "age": ("DeleteOlderThanDays", 0),
+    "count": ("CountLimits", 1),
+    "automatic": ("AutomaticTrim", 2),
 }
-
-
-def _trim_metadata(sp: SharePoint, site: str, mode_name: str) -> tuple[int, str]:
-    """Numeric value of FileVersionBatchDeleteMode.<mode> and its namespace, from the tenant's $metadata."""
-    cache = HOME_DIR / "sp-rest-metadata.xml"
-    if not cache.exists():
-        print("Downloading SharePoint REST metadata (one time)...")
-        HOME_DIR.mkdir(parents=True, exist_ok=True)
-        cache.write_bytes(
-            sp.request(
-                "GET",
-                f"{origin(site)}/_api/$metadata",
-                headers={"Accept": "application/xml"},
-            ).content
-        )
-    root = ET.parse(cache).getroot()
-    value, namespace = None, None
-    for schema in root.iter():
-        if not schema.tag.endswith("Schema"):
-            continue
-        for child in schema:
-            name = child.get("Name")
-            if child.tag.endswith("EnumType") and name == "FileVersionBatchDeleteMode":
-                for member in child:
-                    if member.get("Name") == mode_name:
-                        value = int(member.get("Value", ""))
-            if child.tag.endswith("ComplexType") and name == "FileVersionBatchDeleteParameters":
-                namespace = schema.get("Namespace")
-    if value is None or not namespace:
-        raise UserError(f"Could not resolve FileVersionBatchDeleteMode.{mode_name}. Delete {cache} to refresh it.")
-    return value, namespace
 
 
 def trim_status(sp: SharePoint, sites: list[str]) -> None:
@@ -321,11 +290,10 @@ def start_trim(
     else:
         description = "PERMANENTLY delete versions using the automatic algorithm"
 
-    mode_name = TRIM_MODES[mode]
-    mode_value, namespace = _trim_metadata(sp, sites[0], mode_name)
+    mode_name, mode_value = TRIM_MODES[mode]
     body = {
         "batchDeleteParameters": {
-            "__metadata": {"type": f"{namespace}.FileVersionBatchDeleteParameters"},
+            "__metadata": {"type": "SP.FileVersionBatchDeleteParameters"},
             "BatchDeleteMode": mode_value,
             **params,
         }
