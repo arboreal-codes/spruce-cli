@@ -13,7 +13,8 @@ Preservation Hold Library. Los reportes de cada corrida se guardan en una carpet
 así las rondas nunca se mezclan.
 
 Habla directamente con SharePoint (login con MSAL + REST/CSOM). No necesita PowerShell, PnP,
-Node ni la CLI `m365`: solo [uv](https://docs.astral.sh/uv/).
+Node ni la CLI `m365`: solo [uv](https://docs.astral.sh/uv/) y [Git](https://git-scm.com/downloads)
+(uv lo usa para bajar spruce de GitHub; en Windows: `winget install Git.Git`).
 
 ## Cómo funciona, en resumen
 
@@ -50,18 +51,20 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ```
 
 Instalar spruce como un comando más, de una de estas dos formas (uv descarga Python y las
-dependencias la primera vez):
+dependencias la primera vez). `--python 3.14` importa: con un Python más nuevo algunas
+dependencias (como PyYAML) todavía no tienen wheels precompilados, y en Windows compilarlas
+requiere las Microsoft C++ Build Tools:
 
 **Con el [panel web](#panel-web)** (el extra `[ui]`, suma NiceGUI):
 
 ```bash
-uv tool install "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli"
+uv tool install --python 3.14 "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli"
 ```
 
 **Solo línea de comandos** (más liviano; sin `spruce ui`):
 
 ```bash
-uv tool install "spruce-cli @ git+https://github.com/arboreal-codes/spruce-cli"
+uv tool install --python 3.14 "spruce-cli @ git+https://github.com/arboreal-codes/spruce-cli"
 ```
 
 Para pasar de una a otra más adelante, correr el otro comando con `--reinstall`.
@@ -73,7 +76,7 @@ versión, agregar `@v0.6.0` (un tag) o `@<commit>` a la URL, como en
 Para probar spruce sin instalarlo, usar `uvx` con el mismo paquete:
 
 ```bash
-uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce --help
+uvx --python 3.14 --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce --help
 ```
 
 Después, en la carpeta donde se quieran guardar la configuración y los reportes:
@@ -288,7 +291,7 @@ spruce ui
 ```
 
 Necesita el extra `[ui]`, incluido en la instalación del [inicio rápido](#inicio-rápido) (sin
-instalar: `uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui`).
+instalar: `uvx --python 3.14 --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui`).
 
 Escucha solo en `http://127.0.0.1:8765` (`--port` para cambiarlo, `--no-browser` para no
 abrirlo). La sesión se elige en el encabezado; `-s` y `-p` funcionan como en todos los comandos.
