@@ -12,7 +12,8 @@ recycle bins and the Preservation Hold Library. Every run's reports are kept in 
 folder, so rounds never mix.
 
 It talks to SharePoint directly (MSAL login + REST/CSOM). No PowerShell, PnP, Node or `m365` CLI
-needed; only [uv](https://docs.astral.sh/uv/).
+needed; only [uv](https://docs.astral.sh/uv/) and [Git](https://git-scm.com/downloads) (uv uses it
+to fetch spruce from GitHub; on Windows: `winget install Git.Git`).
 
 ## How it works, in short
 
@@ -45,30 +46,32 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ```
 
 Install spruce as a regular command, in one of two ways (uv downloads Python and the
-dependencies the first time):
+dependencies the first time). `--python 3.14` matters: on a newer Python some dependencies
+(such as PyYAML) have no prebuilt wheels yet, and on Windows building them needs the
+Microsoft C++ Build Tools:
 
 **With the [web dashboard](#web-dashboard)** (the `[ui]` extra, adds NiceGUI):
 
 ```bash
-uv tool install "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli"
+uv tool install --python 3.14 "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli"
 ```
 
 **Command line only** (lighter; `spruce ui` is not available):
 
 ```bash
-uv tool install "spruce-cli @ git+https://github.com/arboreal-codes/spruce-cli"
+uv tool install --python 3.14 "spruce-cli @ git+https://github.com/arboreal-codes/spruce-cli"
 ```
 
 To switch from one to the other later, run the other command with `--reinstall`.
 
 Update with `uv tool upgrade spruce-cli` (it keeps the option you installed). To pin a version,
-add `@v0.6.0` (a tag) or `@<commit>` to the URL, as in
-`"spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli@v0.6.0"`.
+add `@v0.6.1` (a tag) or `@<commit>` to the URL, as in
+`"spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli@v0.6.1"`.
 
 To try spruce without installing it, use `uvx` with the same package spec:
 
 ```bash
-uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce --help
+uvx --python 3.14 --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce --help
 ```
 
 Then, in the folder where you want to keep config and reports:
@@ -271,7 +274,7 @@ spruce ui
 ```
 
 It needs the `[ui]` extra, included in the [quick start](#quick-start) install (without
-installing: `uvx --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui`).
+installing: `uvx --python 3.14 --from "spruce-cli[ui] @ git+https://github.com/arboreal-codes/spruce-cli" spruce ui`).
 
 It listens on `http://127.0.0.1:8765` only (`--port` to change it, `--no-browser` to not open
 it). Pick the session in the header; `-s` and `-p` work as in every command.
